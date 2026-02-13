@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Workout Counter</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:20px}
+.app{background:#fff;border-radius:20px;padding:30px;max-width:400px;margin:0 auto}
+h1{text-align:center;font-size:24px;margin-bottom:25px}
+.input-group{margin-bottom:20px}
+label{display:block;margin-bottom:5px;font-weight:600;font-size:14px}
+input{width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px}
+input[type=range]{height:8px;-webkit-appearance:none;background:#e0e0e0;border-radius:5px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#667eea}
+.speed-val{text-align:center;color:#667eea;font-weight:600;margin-top:5px}
+.display{text-align:center;margin:25px 0;padding:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:15px;color:#fff}
+.count{font-size:80px;font-weight:bold;line-height:1}
+.info{font-size:20px;margin-top:10px}
+.status{font-size:16px;margin-top:10px}
+.rest-timer{font-size:40px;font-weight:bold;margin-top:10px}
+.btn-group{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+button{padding:15px;font-size:16px;font-weight:600;border:none;border-radius:10px;cursor:pointer}
+.btn-start{background:#10b981;color:#fff;grid-column:1/-1}
+.btn-pause{background:#f59e0b;color:#fff}
+.btn-reset{background:#ef4444;color:#fff}
+button:disabled{opacity:0.5}
+button:active{transform:scale(0.95)}
+.complete{text-align:center;color:#10b981;font-weight:600;margin-top:15px;font-size:18px}
+.activate{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:1000;color:#fff;font-size:18px;text-align:center;padding:20px}
+.activate-content{max-width:300px}
+.activate button{background:#10b981;color:#fff;padding:20px 40px;font-size:20px;border:none;border-radius:10px;margin-top:20px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="activateScreen" class="activate">
+<div class="activate-content">
+<div>🔊 Tap to Enable Sound</div>
+<button id="activateBtn">Enable Sound & Start</button>
+</div>
+</div>
+<div class="app">
+<h1>💪 Workout Counter</h1>
+<div class="input-group">
+<label>Sets</label>
+<input type="number" id="sets" min="1" max="20" value="3">
+</div>
+<div class="input-group">
+<label>Reps per Set</label>
+<input type="number" id="reps" min="1" max="100" value="10">
+</div>
+<div class="input-group">
+<label>Rest Time (seconds)</label>
+<input type="number" id="restTime" min="5" max="300" value="60">
+</div>
+<div class="input-group">
+<label>Speed (seconds per rep)</label>
+<input type="range" id="speed" min="0.5" max="5" step="0.5" value="2">
+<div class="speed-val" id="speedVal">2.0s</div>
+</div>
+<div class="display">
+<div class="count" id="count">0</div>
+<div class="info" id="info">Set 1 of 3</div>
+<div class="status" id="status">Ready</div>
+<div class="rest-timer" id="restTimer" style="display:none"></div>
+</div>
+<div class="btn-group">
+<button class="btn-start" id="btnStart">Start</button>
+<button class="btn-pause" id="btnPause" disabled>Pause</button>
+<button class="btn-reset" id="btnReset">Reset</button>
+</div>
+<div class="complete" id="complete"></div>
+</div>
+<script>
+let set=1,rep=0,sets=3,reps=10,spd=2000,restTime=60,run=false,pause=false,timer=null,restTimer=null,speechReady=false;
+const $=(id)=>document.getElementById(id);
+const speak=(txt)=>{
+if(!speechReady)return;
+speechSynthesis.cancel();
+const u=new SpeechSynthesisUtterance(txt);
+u.rate=1.0;
+u.pitch=1.0;
+u.volume=1.0;
+u.lang='en-US';
+speechSynthesis.speak(u);
+};
+const upd=()=>{$('count').textContent=rep;$('info').textContent='Set '+set+' of '+sets};
+$('activateBtn').onclick=()=>{
+speechSynthesis.cancel();
+const u=new SpeechSynthesisUtterance('Ready');
+u.volume=0.01;
+speechSynthesis.speak(u);
+speechReady=true;
+$('activateScreen').style.display='none';
+setTimeout(()=>speak('Ready to start'),100);
+};
+$('speed').oninput=(e)=>{const v=parseFloat(e.target.value);$('speedVal').textContent=v.toFixed(1)+'s';spd=v*1000};
+
+const startRest=(callback)=>{
+let remaining=restTime;
+$('restTimer').style.display='block';
+$('restTimer').textContent=remaining+'s';
+$('status').textContent='Rest Time';
+speak('Rest');
+
+restTimer=setInterval(()=>{
+remaining--;
+$('restTimer').textContent=remaining+'s';
+if(remaining<=3 && remaining>0){
+speak(remaining.toString());
+}
+if(remaining<=0){
+clearInterval(restTimer);
+$('restTimer').style.display='none';
+callback();
+}
+},1000);
+};
+
+const startSet=()=>{
+$('status').textContent='Go!';
+timer=setInterval(()=>{
+rep++;upd();
+speak(rep.toString());
+if(rep>=reps){
+clearInterval(timer);
+if(set<sets){
+speak('Set complete');
+startRest(()=>{
+set++;rep=0;upd();speak('Next set');startSet();
+});
+}else{
+speak('Workout complete!');
+$('status').textContent='Done!';
+$('complete').textContent='🎉 Great job!';
+run=false;
+$('btnStart').disabled=false;$('btnPause').disabled=true;
+$('sets').disabled=false;$('reps').disabled=false;$('restTime').disabled=false;
+}
+}else{$('status').textContent='Working...'}
+},spd);
+};
+
+const start=()=>{
+if(!pause){
+sets=+$('sets').value;
+reps=+$('reps').value;
+restTime=+$('restTime').value;
+set=1;
+rep=0;
+}
+run=true;pause=false;
+$('btnStart').disabled=true;$('btnPause').disabled=false;
+$('sets').disabled=true;$('reps').disabled=true;$('restTime').disabled=true;
+$('complete').textContent='';
+speak('Starting');
+setTimeout(()=>startSet(),500);
+};
+
+$('btnStart').onclick=start;
+
+$('btnPause').onclick=()=>{
+clearInterval(timer);
+clearInterval(restTimer);
+run=false;pause=true;
+$('btnStart').disabled=false;$('btnPause').disabled=true;
+$('status').textContent='Paused';
+$('restTimer').style.display='none';
+speak('Paused');
+};
+
+$('btnReset').onclick=()=>{
+clearInterval(timer);
+clearInterval(restTimer);
+run=false;pause=false;set=1;rep=0;
+upd();$('status').textContent='Ready';$('complete').textContent='';
+$('restTimer').style.display='none';
+$('btnStart').disabled=false;$('btnPause').disabled=true;
+$('sets').disabled=false;$('reps').disabled=false;$('restTime').disabled=false;
+speak('Reset');
+};
+
+upd();
+</script>
+</body>
+</html>
